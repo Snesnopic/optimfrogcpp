@@ -4,10 +4,15 @@
 #include "OptimFROG.h"
 #include <cstdint>
 
+struct ReadInterfaceWrapper {
+    ReadInterface* rInt;
+    void* readerInstance;
+};
+
 class OFR_DecoderEngine {
 public:
     virtual ~OFR_DecoderEngine();
-    virtual bool open();
+    virtual bool open(ReadInterfaceWrapper* wrapper);
     virtual bool read(void* dest, uInt32_t count);
     virtual bool seek(sInt64_t sample_pos);
     virtual bool readTail();

@@ -53,7 +53,8 @@ condition_t OptimFROG_openExt(void* decoderInstance, ReadInterface* rInt, void* 
         }
     }
 
-    if (!pOVar7->open()) {
+    ReadInterfaceWrapper wrapper = {rInt, readerInstance};
+    if (!pOVar7->open(&wrapper)) {
         delete pOVar7;
         instance->pInterface = nullptr;
         return C_FALSE;
