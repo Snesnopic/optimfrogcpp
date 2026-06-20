@@ -53,9 +53,10 @@ condition_t OptimFROG_openExt(void* decoderInstance, ReadInterface* rInt, void* 
         }
     }
 
-    ReadInterfaceWrapper wrapper = {rInt, readerInstance};
-    if (!pOVar7->open(&wrapper)) {
+    ReadInterfaceWrapper* wrapper = new ReadInterfaceWrapper{rInt, readerInstance};
+    if (!pOVar7->open(wrapper)) {
         delete pOVar7;
+        delete wrapper;
         instance->pInterface = nullptr;
         return C_FALSE;
     } else {
@@ -93,7 +94,77 @@ condition_t OptimFROG_openExt(void* decoderInstance, ReadInterface* rInt, void* 
     }
 }
 
+struct FileWrapper {
+    FILE* file;
+    sInt64_t size;
+};
+
+static condition_t file_close(void* instance) {
+    FileWrapper* fw = (FileWrapper*)instance;
+    if (fw->file) {
+        fclose(fw->file);
+        fw->file = nullptr;
+    }
+    delete fw;
+    return C_TRUE;
+}
+
+static sInt32_t file_read(void* instance, void* buffer, uInt32_t size) {
+    FileWrapper* fw = (FileWrapper*)instance;
+    return fread(buffer, 1, size, fw->file);
+}
+
+static condition_t file_eof(void* instance) {
+    FileWrapper* fw = (FileWrapper*)instance;
+    return feof(fw->file) ? C_TRUE : C_FALSE;
+}
+
+static condition_t file_seekable(void* instance) {
+    return C_TRUE;
+}
+
+static sInt64_t file_length(void* instance) {
+    FileWrapper* fw = (FileWrapper*)instance;
+    return fw->size;
+}
+
+static sInt64_t file_getPos(void* instance) {
+    FileWrapper* fw = (FileWrapper*)instance;
+    return ftell(fw->file);
+}
+
+static condition_t file_seek(void* instance, sInt64_t pos) {
+    FileWrapper* fw = (FileWrapper*)instance;
+    return fseek(fw->file, pos, SEEK_SET) == 0 ? C_TRUE : C_FALSE;
+}
+
 condition_t OptimFROG_open(void* decoderInstance, char* fileName, condition_t readTags) {
+    FILE* file = fopen(fileName, "rb");
+    if (!file) {
+        return OptimFROG_OpenError;
+    }
+
+    fseek(file, 0, SEEK_END);
+    sInt64_t size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    FileWrapper* fw = new FileWrapper{file, size};
+
+    ReadInterface* rInt = new ReadInterface();
+    rInt->close = file_close;
+    rInt->read = file_read;
+    rInt->eof = file_eof;
+    rInt->seekable = file_seekable;
+    rInt->length = file_length;
+    rInt->getPos = file_getPos;
+    rInt->seek = file_seek;
+
+    condition_t res = OptimFROG_openExt(decoderInstance, rInt, fw, readTags);
+    if (res != C_TRUE) {
+        file_close(fw);
+        delete rInt;
+        return OptimFROG_OpenError;
+    }
     return OptimFROG_NoError;
 }
 
@@ -191,29 +262,32 @@ sInt32_t OptimFROG_read(void* decoderInstance, void* data, uInt32_t noPoints, co
     
     auto* pInt = instance->pInterface;
     
-    sInt64_t samples_to_read = noPoints * pInt->channels;
-    sInt64_t samples_left = pInt->total_samples - instance->points_read_so_far;
+    sInt64_t points_to_read = noPoints;
+    sInt64_t points_left = pInt->total_samples - instance->points_read_so_far;
     
-    if (samples_to_read > samples_left) {
-        samples_to_read = samples_left;
+    if (points_to_read > points_left) {
+        points_to_read = points_left;
     }
     
-    if (samples_to_read == 0) return 0;
+    if (points_to_read == 0) return 0;
+    
+    sInt64_t samples_to_read = points_to_read * pInt->channels;
     
     int* temp_buffer = (int*)malloc(samples_to_read * sizeof(int));
     if (!temp_buffer) return -1;
     
-    pInt->read(temp_buffer, samples_to_read);
+    uInt32_t points_read = pInt->read(temp_buffer, points_to_read);
+    uInt32_t samples_read = points_read * pInt->channels;
     
     int stype = pInt->sample_type;
     
     if (stype == 0 || stype == 1) { // 8 bit
-        for (sInt64_t i = 0; i < samples_to_read; ++i) {
+        for (sInt64_t i = 0; i < samples_read; ++i) {
             ((uint8_t*)data)[i] = (stype == 0 ? 0x80 : 0) + temp_buffer[i];
         }
     } else if (stype == 2 || stype == 3) { // 16 bit
         int offset = (stype == 2) ? 0x8000 : 0;
-        for (sInt64_t i = 0; i < samples_to_read; ++i) {
+        for (sInt64_t i = 0; i < samples_read; ++i) {
             int val = temp_buffer[i] + offset;
             ((uint8_t*)data)[i*2] = val & 0xFF;
             ((uint8_t*)data)[i*2+1] = (val >> 8) & 0xFF;
@@ -221,14 +295,14 @@ sInt32_t OptimFROG_read(void* decoderInstance, void* data, uInt32_t noPoints, co
     } else if (stype == 4 || stype == 5) { // 24 bit
         int offset = (stype == 4) ? 0x800000 : 0;
         if (!max16bit) {
-            for (sInt64_t i = 0; i < samples_to_read; ++i) {
+            for (sInt64_t i = 0; i < samples_read; ++i) {
                 int val = temp_buffer[i] + offset;
                 ((uint8_t*)data)[i*3] = val & 0xFF;
                 ((uint8_t*)data)[i*3+1] = (val >> 8) & 0xFF;
                 ((uint8_t*)data)[i*3+2] = (val >> 16) & 0xFF;
             }
         } else {
-            for (sInt64_t i = 0; i < samples_to_read; ++i) {
+            for (sInt64_t i = 0; i < samples_read; ++i) {
                 int val = temp_buffer[i] + offset;
                 ((uint8_t*)data)[i*2] = (val >> 8) & 0xFF;
                 ((uint8_t*)data)[i*2+1] = (val >> 16) & 0xFF;
@@ -237,7 +311,7 @@ sInt32_t OptimFROG_read(void* decoderInstance, void* data, uInt32_t noPoints, co
     } else if (stype == 6 || stype == 7) { // 32 bit
         int offset = (stype == 6) ? 0x80000000 : 0;
         if (!max16bit) {
-            for (sInt64_t i = 0; i < samples_to_read; ++i) {
+            for (sInt64_t i = 0; i < samples_read; ++i) {
                 int val = temp_buffer[i] + offset;
                 ((uint8_t*)data)[i*4] = val & 0xFF;
                 ((uint8_t*)data)[i*4+1] = (val >> 8) & 0xFF;
@@ -245,7 +319,7 @@ sInt32_t OptimFROG_read(void* decoderInstance, void* data, uInt32_t noPoints, co
                 ((uint8_t*)data)[i*4+3] = (val >> 24) & 0xFF;
             }
         } else {
-            for (sInt64_t i = 0; i < samples_to_read; ++i) {
+            for (sInt64_t i = 0; i < samples_read; ++i) {
                 int val = temp_buffer[i] + offset;
                 ((uint8_t*)data)[i*2] = (val >> 16) & 0xFF;
                 ((uint8_t*)data)[i*2+1] = (val >> 24) & 0xFF;
@@ -257,8 +331,8 @@ sInt32_t OptimFROG_read(void* decoderInstance, void* data, uInt32_t noPoints, co
     }
     
     free(temp_buffer);
-    instance->points_read_so_far += samples_to_read;
-    return samples_to_read / pInt->channels;
+    instance->points_read_so_far += points_read;
+    return points_read;
 }
 
 condition_t OptimFROG_getInfo(void* decoderInstance, OptimFROG_Info* info) {

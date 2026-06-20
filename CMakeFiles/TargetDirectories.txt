@@ -1,0 +1,4 @@
+/Users/giuseppefrancione/optimfrogcpp/CMakeFiles/optimfrogcpp_lib.dir
+/Users/giuseppefrancione/optimfrogcpp/CMakeFiles/optimfrogcpp.dir
+/Users/giuseppefrancione/optimfrogcpp/CMakeFiles/edit_cache.dir
+/Users/giuseppefrancione/optimfrogcpp/CMakeFiles/rebuild_cache.dir

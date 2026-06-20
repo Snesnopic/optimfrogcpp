@@ -1,0 +1,2 @@
+/usr/bin/ar qc liboptimfrogcpp_lib.a CMakeFiles/optimfrogcpp_lib.dir/src/optimfrog.cpp.o CMakeFiles/optimfrogcpp_lib.dir/src/optimfrog_decoder.cpp.o CMakeFiles/optimfrogcpp_lib.dir/src/optimfrog_decoder_entropy.cpp.o CMakeFiles/optimfrogcpp_lib.dir/src/optimfrog_decoder_predictor.cpp.o
+/usr/bin/ranlib liboptimfrogcpp_lib.a

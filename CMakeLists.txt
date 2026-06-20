@@ -9,6 +9,8 @@ include_directories(include)
 add_library(optimfrogcpp_lib
     src/optimfrog.cpp
     src/optimfrog_decoder.cpp
+    src/optimfrog_decoder_entropy.cpp
+    src/optimfrog_decoder_predictor.cpp
 )
 
 add_executable(optimfrogcpp src/main.cpp)
