@@ -503,6 +503,12 @@ public:
 
     void init(OFR_RangeCoder* rc, uint32_t bit_depth, int Lmn,int Lmx,int Rmn,int Rmx, int dbits, int total);
     void decode(int32_t* dest, uint32_t count);
+    void setup_for_encode(int Lmn,int Lmx,int Rmn,int Rmx, int dbits, int total,
+                          uint32_t main_w, uint32_t main_iv, uint32_t main_maxord, uint32_t main_rightord,
+                          int n_stages, double decay_, uint32_t fcw, uint32_t fch_k, uint32_t golomb_field,
+                          const std::vector<int>& stage_size1, const std::vector<int>& stage_size2,
+                          const std::vector<int>& stage_mu10,
+                          const std::vector<uint8_t>& schL, const std::vector<uint8_t>& schR);
     void cascade_init();
     int  sub_predict(OFR_SubCascade& c, std::vector<OFR_CascadeRing>& pri, std::vector<OFR_CascadeRing>& sec);
     void sub_update(OFR_SubCascade& c, std::vector<OFR_CascadeRing>& pri, std::vector<OFR_CascadeRing>& sec, double actual);

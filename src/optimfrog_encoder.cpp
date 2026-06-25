@@ -350,35 +350,117 @@ bool ofr_encode_stereo16(const int16_t* samples, uint32_t frames, uint32_t sampl
     if (getenv("OFR_WPRED")) WPRED = atoi(getenv("OFR_WPRED"));
     if (getenv("OFR_WENT")) WENT = atoi(getenv("OFR_WENT"));
     if (getenv("OFR_ENT")) ENT = atoi(getenv("OFR_ENT"));   // 1=fast, 2=slow
+    int PRED = 1;
+    if (getenv("OFR_PRED")) PRED = atoi(getenv("OFR_PRED"));   // 1=LPC, 3=cascade
     int max_order = DAT_00326220[OD_IDX];
     int right_order = DAT_00326200[OD_IDX];
     int interval = IVT[IV_IDX];
+    static const int CASC_OT[8] = { 512, 256, 128, 64, 128, 64, 32, 16 };
+    static const int CASC_S2[8] = { 128, 64, 32, 16, 0, 0, 0, 0 };
 
     OFR_RangeEncoder enc;
     // post=1 init (identity), 2 channels
     enc.encode_split(16, (uint32_t)mnL & 0xffff); enc.encode_split(16, (uint32_t)mxL & 0xffff); enc.encode_bits(1, 0);
     enc.encode_split(16, (uint32_t)mnR & 0xffff); enc.encode_split(16, (uint32_t)mxR & 0xffff); enc.encode_bits(1, 0);
-    // predictor init (stereo): weight(12), interval idx(3), order idx(5)
-    enc.encode_bits(12, (uint32_t)(WPRED - 2));
-    enc.encode_bits(3, (uint32_t)IV_IDX);
-    enc.encode_bits(5, (uint32_t)OD_IDX);
-    // entropy init: 12-bit weight value
-    enc.encode_uniform(4096, (uint32_t)(WENT - 2));
-
-    // stereo predictor forward
-    OFR_PredictorStereo_Inner inner;
-    inner.init((double)(WPRED - 1) / (double)WPRED, max_order, max_order - right_order, (uint32_t)interval);
     std::vector<int32_t> res(2 * frames);
-    for (uint32_t f = 0; f < frames; f++) {
-        int L = samples[2*f], R = samples[2*f+1];
-        int prL = (int)std::lrint(inner.predictLeft());
-        int cl = std::max(mnL, std::min(prL, mxL));
-        res[2*f] = ((L - cl) << sh) >> sh;
-        inner.updateLeft((double)L);
-        int prR = (int)std::lrint(inner.predictRight());
-        int cr = std::max(mnR, std::min(prR, mxR));
-        res[2*f+1] = ((R - cr) << sh) >> sh;
-        inner.updateRight((double)R);
+
+    if (PRED == 3) {
+        // ---- pred=3 stereo cascade init (dual of OFR_PredictorCascadeStereo::init) ----
+        const uint32_t MAIN_W = 256, FC_W = 256, K = 4, GOLOMB = 0x40;
+        const int N_STAGES = 2;
+        std::vector<int> st_oidx = { 2, 3 };   // size1/size2 from CASC_OT/CASC_S2
+        std::vector<int> st_s1 = { CASC_OT[st_oidx[0]], CASC_OT[st_oidx[1]] };
+        std::vector<int> st_s2 = { CASC_S2[st_oidx[0]], CASC_S2[st_oidx[1]] };
+        std::vector<int> st_mu10 = { 400, 600 };
+
+        enc.encode_bits(12, MAIN_W - 2);
+        enc.encode_bits(3, (uint32_t)IV_IDX);
+        enc.encode_bits(5, (uint32_t)OD_IDX);
+        enc.encode_bits(3, (uint32_t)(N_STAGES - 1));
+        enc.encode_bits(1, 0);                 // decay flag -> 1.0
+        enc.encode_bits(12, FC_W - 2);
+        enc.encode_bits(3, K);
+        enc.encode_bits(1, 0);                 // golomb flag -> 0x40
+        for (int s = 0; s < N_STAGES; ++s) {
+            enc.encode_bits(5, (uint32_t)st_oidx[s]);
+            enc.encode_bits(10, (uint32_t)st_mu10[s]);
+        }
+        // two all-cascade schedules
+        int firstcd = std::min((int)max_order - (int)right_order + 1, (int)frames);
+        int seg_len = interval;
+        int nseg = ((int)frames + (~firstcd) + seg_len) / seg_len;
+        if (nseg < 0) nseg = 0;
+        std::vector<uint8_t> schL((size_t)nseg + 2, 1), schR((size_t)nseg + 2, 1);
+        OFR_ModelContext cl0, cl1, cr0, cr1;
+        cl0.init(2, 0x8000); cl1.init(2, 0x8000); cr0.init(2, 0x8000); cr1.init(2, 0x8000);
+        OFR_ModelContext* cl[2] = { &cl0, &cl1 }; OFR_ModelContext* cr[2] = { &cr0, &cr1 };
+        enc.encode_symbol(*cl[0], schL[0]); uint32_t pL = schL[0];
+        enc.encode_symbol(*cr[0], schR[0]); uint32_t pR = schR[0];
+        for (int i = 1; i <= nseg; ++i) {
+            enc.encode_symbol(*cl[pL], schL[i]); pL = schL[i];
+            enc.encode_symbol(*cr[pR], schR[i]); pR = schR[i];
+        }
+        // entropy init
+        enc.encode_uniform(4096, (uint32_t)(WENT - 2));
+
+        OFR_PredictorCascadeStereo cs;
+        cs.setup_for_encode(mnL, mxL, mnR, mxR, data_bits, (int)(2 * frames),
+                            MAIN_W, (uint32_t)interval, (uint32_t)max_order, (uint32_t)right_order,
+                            N_STAGES, 1.0, FC_W, K, GOLOMB, st_s1, st_s2, st_mu10, schL, schR);
+        cs.cascade_init(); cs.sample_counter = 0xac44; cs.need_init = false;
+        for (uint32_t f = 0; f < frames; f++) {
+            if (--cs.sample_counter == 0) cs.sample_counter = 0xac44;
+            int L = samples[2*f], R = samples[2*f+1];
+            if (cs.mode_L == 0) {
+                int p = (int)std::lrint(cs.main.predictLeft());
+                int cp = std::max(mnL, std::min(p, mxL));
+                res[2*f] = ((L - cp) << sh) >> sh;
+                cs.main.updateLeft((double)L);
+                cs.sub_predict(cs.casL, cs.ringsA, cs.ringsB);
+                cs.sub_update(cs.casL, cs.ringsA, cs.ringsB, (double)L);
+            } else {
+                int p = cs.sub_predict(cs.casL, cs.ringsA, cs.ringsB);
+                int cp = std::max(mnL, std::min(p, mxL));
+                res[2*f] = ((L - cp) << sh) >> sh;
+                cs.sub_update(cs.casL, cs.ringsA, cs.ringsB, (double)L);
+                cs.main.updateLeft((double)L);
+            }
+            if (cs.mode_R == 0) {
+                int p = (int)std::lrint(cs.main.predictRight());
+                int cp = std::max(mnR, std::min(p, mxR));
+                res[2*f+1] = ((R - cp) << sh) >> sh;
+                cs.main.updateRight((double)R);
+                cs.sub_predict(cs.casR, cs.ringsB, cs.ringsA);
+                cs.sub_update(cs.casR, cs.ringsB, cs.ringsA, (double)R);
+            } else {
+                int p = cs.sub_predict(cs.casR, cs.ringsB, cs.ringsA);
+                int cp = std::max(mnR, std::min(p, mxR));
+                res[2*f+1] = ((R - cp) << sh) >> sh;
+                cs.sub_update(cs.casR, cs.ringsB, cs.ringsA, (double)R);
+                cs.main.updateRight((double)R);
+            }
+            if (--cs.cc_count == 0) { cs.mode_L = cs.schedL[cs.sched_idx]; cs.mode_R = cs.schedR[cs.sched_idx]; cs.cc_count = cs.seg_len; cs.sched_idx++; }
+        }
+    } else {
+        // ---- pred=1 stereo ----
+        enc.encode_bits(12, (uint32_t)(WPRED - 2));
+        enc.encode_bits(3, (uint32_t)IV_IDX);
+        enc.encode_bits(5, (uint32_t)OD_IDX);
+        enc.encode_uniform(4096, (uint32_t)(WENT - 2));
+
+        OFR_PredictorStereo_Inner inner;
+        inner.init((double)(WPRED - 1) / (double)WPRED, max_order, max_order - right_order, (uint32_t)interval);
+        for (uint32_t f = 0; f < frames; f++) {
+            int L = samples[2*f], R = samples[2*f+1];
+            int prL = (int)std::lrint(inner.predictLeft());
+            int cl = std::max(mnL, std::min(prL, mxL));
+            res[2*f] = ((L - cl) << sh) >> sh;
+            inner.updateLeft((double)L);
+            int prR = (int)std::lrint(inner.predictRight());
+            int cr = std::max(mnR, std::min(prR, mxR));
+            res[2*f+1] = ((R - cr) << sh) >> sh;
+            inner.updateRight((double)R);
+        }
     }
 
     // entropy encode (interleaved L/R, two variances)
@@ -410,7 +492,7 @@ bool ofr_encode_stereo16(const int16_t* samples, uint32_t frames, uint32_t sampl
     put16(file, 0x2585); file.push_back(0x02); put16(file, 20);
     file.push_back('H'); file.push_back('E'); file.push_back('A'); file.push_back('D');
     put32(file, 0);
-    uint16_t reserved = ((uint16_t)ENT << 11) | (1u << 6) | 1u;
+    uint16_t reserved = ((uint16_t)ENT << 11) | ((uint16_t)PRED << 6) | 1u;
     std::vector<uint8_t> payload;
     auto p32 = [&](uint32_t v){ payload.push_back(v); payload.push_back(v>>8); payload.push_back(v>>16); payload.push_back(v>>24); };
     p32(values);

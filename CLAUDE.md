@@ -124,8 +124,13 @@ reference encoder's choices, only be valid and self-consistent.
     main LPC params + n_stages + decay flag + fc weight/k + golomb flag + per-stage o5/mu10 + the
     schedule (encode_symbol on two 2-symbol contexts, N+1 syms, all-cascade). Verified bit-exact lossless
     vs reference (ent=1 and ent=2). Compression ≈ pred=1 with the current (untuned) fixed cascade params;
-    beating pred=1 needs schedule/stage tuning (optimization, not correctness). **STEREO pred=3 not yet
-    implemented** (the stereo encoder ignores OFR_PRED → pred=1).
+    beating pred=1 needs schedule/stage tuning (optimization, not correctness).
+  - **pred=3 STEREO encoder** (`OFR_PRED=3` + stereo): `OFR_PredictorCascadeStereo::setup_for_encode`
+    (pred3 TU) + forward loop (encoder TU, integer + cross-channel cascade method calls). Init dual:
+    main params (order idx sets max+right_order) + n_stages + decay flag + fc weight/k + golomb flag +
+    per-stage o5(sets size1/size2 via CASC_OT/CASC_S2)/mu10 + **two** interleaved schedules (4 contexts).
+    Forward mirrors `decode()`: per frame L then R, each main(cross-channel LDLT) or cascade, shared
+    rings A(L errs)/B(R errs). Verified bit-exact vs reference (ent=1/2, music/loud/noise stereo).
   - **MONO order up to ~96** (reliable, bit-exact vs reference). Since the faithful mono weight-update
     port (below), high-order mono decodes losslessly on the reference. Default order=64 ≈ preset 4
     (beats it on music). Orders ≥192 still desync (other high-order path, not chased). **STEREO still

@@ -643,6 +643,49 @@ void OFR_PredictorCascadeStereo::init(OFR_RangeCoder* rc, uint32_t bit_depth,
 
 }
 
+void OFR_PredictorCascadeStereo::setup_for_encode(int Lmn,int Lmx,int Rmn,int Rmx, int dbits, int total,
+        uint32_t main_w, uint32_t main_iv, uint32_t main_maxord, uint32_t main_rightord,
+        int n_stages, double decay_, uint32_t fcw, uint32_t fch_k, uint32_t golomb_field,
+        const std::vector<int>& stage_size1, const std::vector<int>& stage_size2,
+        const std::vector<int>& stage_mu10,
+        const std::vector<uint8_t>& schL, const std::vector<uint8_t>& schR) {
+    min_L=Lmn; max_L=Lmx; min_R=Rmn; max_R=Rmx; shift=32-dbits; total_samples=total;
+    main_weight_param=main_w; main_interval=main_iv; main_max_order=main_maxord; main_right_order=main_rightord;
+
+    sub_cascade_alloc(casL, n_stages, decay_, fcw, 1u << fch_k, golomb_field);
+    sub_cascade_alloc(casR, n_stages, decay_, fcw, 1u << fch_k, golomb_field);
+    casL.stages.assign(n_stages + 1, OFR_CascadeStageX());
+    casR.stages.assign(n_stages + 1, OFR_CascadeStageX());
+    ringsA.assign(n_stages + 1, OFR_CascadeRing());
+    ringsB.assign(n_stages + 1, OFR_CascadeRing());
+
+    double eps = std::max({(double)std::abs(min_L),(double)std::abs(max_L),
+                           (double)std::abs(min_R),(double)std::abs(max_R), 1.0});
+    for (int s = 1; s <= n_stages; ++s) {
+        int size1 = stage_size1[s-1], size2 = stage_size2[s-1];
+        double mu = (double)stage_mu10[s-1] / DAT_19688;
+        OFR_SubCascade* subs[2] = {&casL, &casR};
+        for (int ci = 0; ci < 2; ++ci) {
+            OFR_CascadeStageX& st = subs[ci]->stages[s];
+            st.size1 = size1; st.size2 = size2; st.mu = mu; st.eps = eps; st.energy = 0.0;
+            st.w1.assign(std::max(8, size1), 0.0f);
+            st.w2.assign(std::max(8, size2), 0.0f);
+        }
+        int rsz = std::max(size1 + 1, size2);
+        OFR_CascadeRing* rgs[2] = {&ringsA[s], &ringsB[s]};
+        for (int ri = 0; ri < 2; ++ri) { rgs[ri]->ring.assign(0x400, 0.0f); rgs[ri]->copy = rsz; rgs[ri]->cur = rsz; }
+    }
+
+    seg_len = (int)main_interval;
+    schedL = schL; schedR = schR;
+    int frames = total / 2;
+    int firstcd = std::min((int)main_max_order - (int)main_right_order + 1, frames);
+    cc_count = firstcd;
+    mode_L = schedL[0]; mode_R = schedR[0];
+    sched_idx = 1;
+    need_init = true;
+}
+
 void OFR_PredictorCascadeStereo::decode(int32_t* dest, uint32_t count) {
     if (need_init) { cascade_init(); sample_counter = 0xac44; need_init = false; }
     int sh = shift & 0x1f;
