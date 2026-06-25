@@ -102,8 +102,53 @@ cascade with TWO channels + TWO schedules (L at +0x67290, R at +0x7b690).
   offsets: stages count +0x14c0, cumsum +0x1390, ring +0x1130, stage +0xdd0, stage_pred +0x1300,
   bias +0x12e0. Per-stage predict is **FUN_0000f980 (3 args: stage, ringptr, +0x1208+s*0x18)** — the
   extra arg is the OTHER channel's history → cross-channel FIR. Final combiner reuses FUN_000154e0.
-- Need: FUN_0000f980 (cross-channel stage FIR), FUN_0000f130/predict/update for both channels, the
-  init reading stereo cascade params + 2 schedules. Reuse mono cascade machinery + add cross-channel FIR.
+### Stereo cascade — full map (all functions decompiled, ready to port)
+**Two shared error rings**: chA at +0x1130 (L errors), chB at +0x1208 (R errors), each a ring struct
+(cur,base,copy,size) like mono. **Two sub-cascades**:
+- L cascade: stages +0xdd0+s*0x30, combiner at obj+0 (FUN_000154e0/FUN_00015890), bias +0x12e0,
+  decay +0x12e8, stage_pred +0x1300, cumsum +0x1390. predict FUN_0000f2d0 (advances chA, secondary=chB),
+  update FUN_0000f400. primary ring chA, secondary chB.
+- R cascade: stages +0xf80+s*0x30, combiner at obj+0x6e8, bias +0x12f0, decay +0x12f8,
+  stage_pred +0x13e0, cumsum +0x1470. predict FUN_0000f510 (advances chB, secondary=chA), update FUN_0000f640.
+
+**Cross-channel stage** (0x30 bytes): +0 w1, +8 w2, +0x10 size1, +0x14 size2, +0x18 energy(double),
+  +0x20 mu, +0x28 eps. init FUN_0000ea10(mu,eps,stage,size1,size2) allocs w1[size1],w2[size2] (16-aligned, min8, zeroed).
+- FIR FUN_0000f980(stage, primary_ring_cur, secondary_ring_cur): acc=0; loop1 over size1 on
+  primary[cur-size1..cur-1] with w1; loop2 over size2 on secondary[cur+1-size2..cur] with w2 — SAME 4-acc
+  SSE grouping as mono `acc=h4*w4+(h0*w0+acc)`, accumulators CARRY across both loops; pairwise horizontal sum.
+  NOTE secondary window is `secptr + (1-size2) .. secptr` (INCLUDES secptr[0]); primary is `pri-size1..pri-1`.
+- NLMS FUN_0000fa30(res_float, stage, primary_ring_cur, secondary_ring_cur): energy =
+  secptr[0]^2 + ((priptr[-1]^2 + (energy - priptr[-(size1+1)]^2)) - secptr[-size2]^2) (double, MOVSD);
+  step=(res*mu)/(energy+eps); w1[i]+=pri[i]*step (i in 0..size1-1, pri=priptr-size1);
+  w2[i]+=sec[i]*step (i in 0..size2-1, sec=secptr+1-size2).
+
+**Decode FUN_00009c20** per frame (i+=2): L then R.
+- L: mode +0x67188; mode0 → predictLeft(FUN_00012ed0) clamp[+0x67158,+0x6715c] shift+0x67168, updateLeft, then
+  cascadeL predict(FUN_0000f2d0)+update(FUN_0000f400); mode1 → cascadeL predict (returns int) clamp/shift,
+  cascadeL update, updateLeft. R: mode +0x6718c; clamp[+0x67160,+0x67164]; predictRight/updateRight +
+  cascadeR (FUN_0000f510/FUN_0000f640).
+- countdown +0x67190 (reset +0x67184); on hitting 0: L mode=schedL[idx], R mode=schedR[idx],
+  count=+0x67184, idx++. When count==1, sets flags +0x65c70/+0x65c71 from schedL/R[idx] (look-ahead, used by cascade? verify).
+
+**Init FUN_00008b00** (vtable[0]): reads, in order:
+1. main stereo predictor: weight(12b → +0x67148), interval(3b/DAT_21ca0 → +0x67154),
+   order5b: max_order(DAT_21cd0 → +0x6714c) + right_order(DAT_21cf0 → +0x67150) [0x1f→8b+1, 8b].
+2. cascade: nStages(3b+1 → +0x67278); decay(1b; set→10b*DAT_19718 else 1.0 → +0x67270);
+   fc weight(12b → +0x6727c); fc halve(3b→1<<k → +0x67280); +0x67284(1b; set→16b else 0x40).
+   per stage s: size1(5b → DAT_21ea2[idx] / 0x1f→8b*4+4 → +0x67228+s*4),
+   size2(DAT_21eaa[idx] / 0x1f→8b*4 → +0x6724c+s*4), mu(10b/DAT_19688 → +0x67198+s*8).
+   +0x67184 = interval. stage eps +0x671e0 = max(|Lmin|,|Lmax|,|Rmin|,|Rmax|,1.0).
+3. TWO schedules (interleaved): ctxL[2] & ctxR[2] (FUN_0000fb90(.,2,2,0x8000)); first L sym → +0x67290[0],
+   first R sym → +0x7b690[0]; then loop: nseg = ((total>>1) + ~min(max_order-right_order+1, total>>1) +
+   interval)/interval; per seg decode L (ctxL[prevL]) and R (ctxR[prevR]) into +0x67290[i]/+0x7b690[i].
+   sentinels at [nseg+1]. total = +0x67180 (interleaved samples).
+4. +0x67190=cc_count=min(max_order-right_order+1, total>>1), +0x67188=schedL[0], +0x6718c=schedR[0],
+   +0x67194=1, +0x67170=need_init.
+
+Tables: DAT_21ea2 (size1) = {512,256,128,64,128,64,32,16,0..}; DAT_21eaa (size2) = {128,64,32,16,0..}
+(= DAT_21ea2 shifted by 4 shorts). DAT_21cf0 = right_order table (pred=1 stereo, = our DAT_00326200).
+
+Reuse: OFR_PredictorStereo_Inner (done) for main; mono cascade machinery extended with cross-channel FIR/NLMS.
 
 ## Helper functions to port
 predict: FUN_0000edc0, FUN_0000f850, FUN_000154e0

@@ -81,14 +81,19 @@ The COMP block's "2 bytes reserved" word encodes `pred=(w>>6)&0x1f, ent=w>>11, p
 
 ## Test status (preset matrix, 16-bit, realistic non-tonal sources)
 
-**`pred_type=1` complete** (presets 0-3, mono+stereo). **`pred_type=3` mono complete** (presets 4-10).
+**`pred_type=1` AND `pred_type=3` complete, mono+stereo** (presets 0-10). 22/24 preset×channel pass.
 
 | Combo | Status |
 |---|---|
 | pred=1, ent∈{1,2}, post∈{1,2}, mono+stereo (presets 0-3) | PASS bit-exact |
-| pred=3 mono (presets 4-10) | PASS bit-exact (cascade NLMS, `optimfrog_decoder_pred3.cpp`) |
-| pred=3 stereo (presets 4-10) | FAIL — not implemented yet |
-| pred=3 + ent=3 (preset max) | FAIL — entropy_type=3 not implemented |
+| pred=3 mono+stereo (presets 4-10) | PASS bit-exact (cascade NLMS, `optimfrog_decoder_pred3.cpp`) |
+| preset max (entropy_type=3) mono+stereo | FAIL — entropy_type=3 not implemented |
+
+### pred_type=3 stereo note
+Reuses `OFR_PredictorStereo_Inner` (main) + two **cross-channel** cascades sharing two per-stage error
+rings (A=L errors, B=R errors); L cascade primary=A/secondary=B, R cascade primary=B/secondary=A.
+The final combiner's initial `last_halve` = the golomb param field (0x67284), so the first LDLT re-solve
+fires at counter = halve_interval + that field (NOT at halve_interval). Same field exists for mono (0x437ac).
 
 ### pred_type=3 mono notes (bit-exact)
 - Dual predictor: LPC (reuses `OFR_Predictor`) + cascade NLMS, alternating per segment via an
@@ -108,21 +113,10 @@ transform flag `obj+0x9a`==1 — triggered by tonal/synthetic signals (pure sine
 
 ## Next work (ordered by cost)
 
-0. **pred_type=3 STEREO** (presets 4-10 stereo) — mono is DONE/bit-exact. Stereo reuses
-   `OFR_PredictorStereo_Inner` (already bit-exact) + a **cross-channel** cascade (decode `FUN_00009c20`,
-   per-stage FIR `FUN_0000f980` takes both channels' history, two schedules). See `doc/pred3_analysis.md`
-   "Stereo pred=3" section. Matrix: 15/24 presets pass (all mono 0-10 + stereo pred=1 0-3).
-1. **pred_type=3** (presets 4→max) — mono done; stereo + max remain. Fully reverse-engineered. **See `doc/pred3_analysis.md`
-   for the complete function-by-function map** (object layout, decode loop, cascade NLMS predict/update,
-   stage FIR, final combiner, and the init that reads params + decodes the entropy-coded segment schedule).
-   It is a DUAL predictor: standard LPC (object+0x10, same as pred=1) + a secondary **cascade of float32
-   NLMS adaptive filters** (object+0x42c60), alternating per segment via an entropy-coded schedule (0x437b8).
-   All ~15 helper functions decompiled. Main implementation risks: float32 bit-exactness (compile that TU
-   WITHOUT -ffast-math, keep the ×8 / 4-accumulator unroll order), and decoding the embedded schedule with
-   the existing adaptive-tree context code. This is the single largest remaining component.
-2. **entropy_type=3** (preset max, acm).
-3. **post_type=2 value-remap table** (only for tonal signals).
-4. Encoder (not started).
+1. **entropy_type=3** (preset max, "acm") — the only remaining decode path for the standard presets.
+   Both mono and stereo `max` use it (paired with pred=3).
+2. **post_type=2 value-remap table** (`FUN_00017f00`/`FUN_00018cb0`) — only for tonal/synthetic signals.
+3. Encoder (not started).
 
 ## Recent fixes (this session)
 - entropy path selection by `type==1 && channels==2` (was `is_fast_stereo`) → ent=2 stereo works.

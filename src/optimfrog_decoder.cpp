@@ -238,6 +238,15 @@ uInt32_t OFR_DecoderEngine::read(void* dest, uInt32_t count) {
                 int mx = pp ? pp->max_val_L : 0x7fffff;
                 this->block_decoder.predictor_cascade_mono->init(
                     &this->range_coder, this->bitspersample, mn, mx, data_bits, (int)uncompressed_size);
+            } else if (pred_type == 3 && this->channels == 2) {
+                if (!this->block_decoder.predictor_cascade_stereo) {
+                    this->block_decoder.predictor_cascade_stereo = new OFR_PredictorCascadeStereo();
+                }
+                OFR_PostProcessor* pp = this->block_decoder.post_processor;
+                this->block_decoder.predictor_cascade_stereo->init(
+                    &this->range_coder, this->bitspersample,
+                    pp->min_val_L, pp->max_val_L, pp->min_val_R, pp->max_val_R,
+                    data_bits, (int)uncompressed_size);
             }
 
             // Entropy Coder

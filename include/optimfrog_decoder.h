@@ -458,6 +458,50 @@ public:
     void cascade_update(double actual);
 };
 
+// pred_type=3 stereo: OFR_PredictorStereo_Inner (main) + two cross-channel cascades.
+struct OFR_CascadeStageX {        // cross-channel NLMS stage
+    std::vector<float> w1, w2;    // this-channel taps, other-channel taps
+    int size1, size2;
+    double energy, mu, eps;
+};
+struct OFR_CascadeRing {
+    std::vector<float> ring;      // 0x400 floats
+    int cur, copy;               // head index, copy count (=max(size1+1,size2))
+};
+struct OFR_SubCascade {           // one channel's cascade (predicts via primary+secondary ring)
+    int n_stages = 0;
+    std::vector<OFR_CascadeStageX> stages;  // 1-based
+    double bias = 0.0, decay = 1.0;
+    std::vector<double> stage_pred, cumsum, errv;
+    uint32_t fc_counter = 0, fc_last_halve = 0, fc_halve_interval = 0;
+    int fc_size = 0; double fc_decay = 1.0;
+    std::vector<double> fc_coefs, fc_v;
+    std::vector<std::vector<double>> fc_mat;
+};
+
+class OFR_PredictorCascadeStereo {
+public:
+    OFR_PredictorStereo_Inner main;     // the +0x10 cross-channel LDLT predictor (reused)
+    std::vector<OFR_CascadeRing> ringsA, ringsB;  // per-stage shared error rings (1-based)
+    OFR_SubCascade casL, casR;          // L: primary A, secondary B ; R: primary B, secondary A
+
+    int min_L=0, max_L=0, min_R=0, max_R=0, shift=0;
+    int total_samples=0;
+    uint32_t main_weight_param=0, main_max_order=0, main_right_order=0, main_interval=0;
+
+    int seg_len=0, cc_count=0, mode_L=0, mode_R=0; uint32_t sched_idx=0;
+    std::vector<uint8_t> schedL, schedR;
+    bool need_init=false;
+    uint32_t sample_counter=0;
+
+    void init(OFR_RangeCoder* rc, uint32_t bit_depth, int Lmn,int Lmx,int Rmn,int Rmx, int dbits, int total);
+    void decode(int32_t* dest, uint32_t count);
+    void cascade_init();
+    int  sub_predict(OFR_SubCascade& c, std::vector<OFR_CascadeRing>& pri, std::vector<OFR_CascadeRing>& sec);
+    void sub_update(OFR_SubCascade& c, std::vector<OFR_CascadeRing>& pri, std::vector<OFR_CascadeRing>& sec, double actual);
+    void fc_solve(OFR_SubCascade& c);
+};
+
 class OFR_PostProcessor {
 public:
     void init(OFR_RangeCoder* rc, uint32_t bit_depth, uint32_t channels);
@@ -498,9 +542,10 @@ public:
     OFR_PredictorFastStereo* predictor_fast_stereo;
     OFR_PredictorStereo* predictor_stereo;
     OFR_PredictorCascadeMono* predictor_cascade_mono;
+    OFR_PredictorCascadeStereo* predictor_cascade_stereo;
     OFR_PostProcessor* post_processor;
 
-    OFR_BlockDecoder() : entropy(nullptr), predictor(nullptr), predictor_fast_stereo(nullptr), predictor_stereo(nullptr), predictor_cascade_mono(nullptr), post_processor(nullptr) {}
+    OFR_BlockDecoder() : entropy(nullptr), predictor(nullptr), predictor_fast_stereo(nullptr), predictor_stereo(nullptr), predictor_cascade_mono(nullptr), predictor_cascade_stereo(nullptr), post_processor(nullptr) {}
 
     void decode_block(uint32_t* dest, uint32_t count, OFR_RangeCoder* rc) {
         if (entropy) entropy->decode_block((int32_t*)dest, count, rc);
@@ -511,6 +556,7 @@ public:
         if (predictor_fast_stereo) predictor_fast_stereo->decode((int*)dest, count);
         if (predictor_stereo) predictor_stereo->decode((int32_t*)dest, count);
         if (predictor_cascade_mono) predictor_cascade_mono->decode((int32_t*)dest, count);
+        if (predictor_cascade_stereo) predictor_cascade_stereo->decode((int32_t*)dest, count);
         if (post_processor) post_processor->decode((int*)dest, count, post_processor->m_channels);
     }
 };
