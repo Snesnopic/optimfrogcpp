@@ -227,13 +227,20 @@ The earlier "100%" was an over-claim from the narrow matrix. The suite found and
 - Stereo two-stage singular fallback ported (`FUN_00013310`/`FUN_00013bf0`): impulse/fullscale stereo
   now bit-exact.
 
-**Remaining decoder gaps (suite-tracked, narrow — degenerate/tonal stereo only; real music passes):**
-1. **Residual stereo singular fallback**: ramp/square stereo still diverge at a *later* singular
-   weight-update (e.g. ramp @frame 2769) — the two-stage fallback handles the first but not all
-   subsequent singular cases.
-2. **post=2 active value-remap on stereo**: tonal/structured stereo with the remap flag set diverges
-   from frame 0 (e.g. corpus2's first block). Mono remap + stereo identity-remap (most real music) are
-   fine; the active stereo remap path has a bug.
+**Remaining decoder gaps (suite-tracked: PASS=504 FAIL=56). ALL failures are STEREO with post=2 the
+active value-remap. Real non-tonal music (remap inactive) + ALL mono = bit-exact.** Two sub-classes,
+both ~1-ULP numerical-faithfulness of the stereo predictor on the *remapped* (dense-index) signal
+(the same class as the original mono-ramp gap, now in the stereo+post=2 path; the predictor TU is
+already -fno-fast-math, so the residual is op-ordering in the stereo predict/weight-update):
+1. **L==R singular** (ramp/square/multitone stereo): cross-channel covariance is rank-deficient; the
+   two-stage fallback (ported) handles the first singular update but a *later* one still diverges
+   (e.g. ramp @frame 2769).
+2. **L≠R tonal** (len1023/1024/1025, corpus2's tonal block): a stereo weight-update on the remapped
+   data yields 1-ULP-off weights → `lrint(predictRight())` rounds to a steady **+1** on the R channel
+   (e.g. len1024 R = ref+1 from frame 285; L exact). Need predictRight/updateRight/solveCholesky float
+   op-order bit-exact to the binary (cf. how the mono ramp needed the exact FUN_00012ca0 order).
+Verified-good: impulse/fullscale stereo (two-stage fallback), sine/dc/silence/noise/nearzero stereo,
+all mono, real multi-block music.
 
 ## Next work (ordered by cost)
 
