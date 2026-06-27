@@ -548,7 +548,7 @@ public:
 class OFR_PostProcessor {
 public:
     void init(OFR_RangeCoder* rc, uint32_t bit_depth, uint32_t channels);
-    void init2(OFR_RangeCoder* rc, uint32_t channels);   // post_type=2 (faithful, with value-remap)
+    void init2(OFR_RangeCoder* rc, uint32_t channels, uint32_t bit_depth);   // post_type=2 (faithful, with value-remap)
 
 public:
     uint32_t m_channels;

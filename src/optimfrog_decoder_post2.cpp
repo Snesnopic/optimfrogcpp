@@ -104,7 +104,7 @@ void build_inverse(int A, int B, bool flag, const std::vector<uint8_t>& present,
 }
 } // namespace
 
-void OFR_PostProcessor::init2(OFR_RangeCoder* rc, uint32_t channels) {
+void OFR_PostProcessor::init2(OFR_RangeCoder* rc, uint32_t channels, uint32_t bit_depth) {
     m_channels = channels;
     has_remap = false;
     int A[2] = {0,0}, B[2] = {0,0};
@@ -112,8 +112,8 @@ void OFR_PostProcessor::init2(OFR_RangeCoder* rc, uint32_t channels) {
     std::vector<uint8_t> present[2];
 
     for (uint32_t ch = 0; ch < channels; ++ch) {
-        A[ch] = sext(rc->read_uniform_split(16), 16);
-        B[ch] = sext(rc->read_uniform_split(16), 16);
+        A[ch] = sext(rc->read_uniform_split(bit_depth), bit_depth);
+        B[ch] = sext(rc->read_uniform_split(bit_depth), bit_depth);
         flag[ch] = rc->read_uniform_bits(1) != 0;
         if (flag[ch]) {
             has_remap = true;

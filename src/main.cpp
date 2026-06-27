@@ -33,15 +33,18 @@ int main(int argc, char** argv) {
     }
     
     std::cout << "Attempting to decode..." << std::endl;
-    // 16-bit stereo takes 4 bytes per frame.
-    std::vector<int16_t> buffer(info.channels * 4096);
+    // OptimFROG_read fills the buffer in the native sample format: bitspersample/8
+    // bytes per value (1/2/3/4). Size the buffer for the widest case and write the
+    // native byte width so 8/24/32-bit output is byte-exact (not just 16-bit).
+    const uint32_t bytesPerValue = info.bitspersample / 8;
+    std::vector<uint8_t> buffer(info.channels * 4096 * 4);
     int total_read = 0;
     FILE* out_f = fopen("test.raw", "wb");
     while (true) {
         int read = OptimFROG_read(instance, buffer.data(), 4096);
         if (read <= 0) break;
         total_read += read;
-        if (out_f) fwrite(buffer.data(), sizeof(int16_t), read * info.channels, out_f);
+        if (out_f) fwrite(buffer.data(), bytesPerValue, read * info.channels, out_f);
     }
     if (out_f) fclose(out_f);
     std::cout << "Decoded " << total_read << " samples." << std::endl;

@@ -190,7 +190,7 @@ uInt32_t OFR_DecoderEngine::read(void* dest, uInt32_t count) {
                     this->block_decoder.post_processor = new OFR_PostProcessor();
                 }
                 if (post_type == 2) {
-                    this->block_decoder.post_processor->init2(&this->range_coder, this->channels);
+                    this->block_decoder.post_processor->init2(&this->range_coder, this->channels, this->bitspersample);
                 } else {
                     this->block_decoder.post_processor->init(&this->range_coder, reduced_bit_depth, this->channels);
                 }
