@@ -219,7 +219,11 @@ void OFR_Predictor::decode(int* dest, int count) {
     int sh = shift & 0x1f;
     for (int i = 0; i < count; i++) {
         int error = dest[i];
-        int p = (int)std::round(predict());
+        double rounded = std::round(predict());
+        // same cvtsd2si-overflow sentinel as the stereo path (round_to_int32_cvtsd2si);
+        // keeps this function's existing round() semantics for the in-range case and only
+        // fixes the int32 cast overflow, which only 32-bit-range content can hit.
+        int p = (rounded < -2147483648.0 || rounded > 2147483647.0) ? INT32_MIN : (int)rounded;
         int cp = std::max(min_val, std::min(p, max_val));
         int v = ((cp + error) << sh) >> sh;
         dest[i] = v;

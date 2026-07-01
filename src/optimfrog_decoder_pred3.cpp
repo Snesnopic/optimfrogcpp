@@ -12,6 +12,15 @@
 #include <cstring>
 #include <algorithm>
 
+// Emulates the x86 cvtsd2si/cvttsd2si "integer indefinite" behavior: on int32 overflow,
+// hardware yields INT32_MIN (0x80000000), not a modular wraparound (see the identical
+// helper + rationale in optimfrog_decoder_predictor.cpp). Only matters for 32-bit-range
+// content whose prediction can overshoot INT32_MAX.
+static inline int32_t round_to_int32_cvtsd2si(double x) {
+    long lr = std::lrint(x);
+    return (lr < INT32_MIN || lr > INT32_MAX) ? INT32_MIN : (int32_t)lr;
+}
+
 // --- adaptive 2-symbol Markov context for the segment schedule (FUN_0000fb90 family) ---
 namespace {
 struct SchedCtx {
@@ -357,7 +366,7 @@ int OFR_PredictorCascadeMono::cascade_predict() {
     double fin = 0.0;
     for (int i = 0; i < fc_size; ++i) fin += cumsum[n_stages - i] * fc_coefs[i];
     fin += bias;
-    return (int)std::lrint(fin);
+    return round_to_int32_cvtsd2si(fin);
 }
 
 void OFR_PredictorCascadeMono::cascade_update(double actual) {
@@ -400,7 +409,7 @@ void OFR_PredictorCascadeMono::decode(int32_t* dest, uint32_t count) {
         int res = dest[i];
         int out;
         if (cc_mode == 0) {
-            int p = (int)std::lrint(main_lpc.predict());
+            int p = round_to_int32_cvtsd2si(main_lpc.predict());
             int cp = std::max(min_val, std::min(p, max_val));
             out = ((cp + res) << sh) >> sh;
             dest[i] = out;
@@ -510,7 +519,7 @@ int OFR_PredictorCascadeStereo::sub_predict(OFR_SubCascade& c,
     double fin = 0.0;
     for (int i = 0; i < c.fc_size; ++i) fin += c.cumsum[c.n_stages - i] * c.fc_coefs[i];
     fin += c.bias;
-    return (int)std::lrint(fin);
+    return round_to_int32_cvtsd2si(fin);
 }
 
 void OFR_PredictorCascadeStereo::sub_update(OFR_SubCascade& c,
@@ -694,7 +703,7 @@ void OFR_PredictorCascadeStereo::decode(int32_t* dest, uint32_t count) {
         int resL = dest[i];
         int outL;
         if (mode_L == 0) {
-            int p = (int)std::lrint(main.predictLeft());
+            int p = round_to_int32_cvtsd2si(main.predictLeft());
             int cp = std::max(min_L, std::min(p, max_L));
             outL = ((cp + resL) << sh) >> sh;
             dest[i] = outL;
@@ -712,7 +721,7 @@ void OFR_PredictorCascadeStereo::decode(int32_t* dest, uint32_t count) {
         int resR = dest[i+1];
         int outR;
         if (mode_R == 0) {
-            int p = (int)std::lrint(main.predictRight());
+            int p = round_to_int32_cvtsd2si(main.predictRight());
             int cp = std::max(min_R, std::min(p, max_R));
             outR = ((cp + resR) << sh) >> sh;
             dest[i+1] = outR;

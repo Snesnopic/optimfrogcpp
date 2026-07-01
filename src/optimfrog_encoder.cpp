@@ -128,7 +128,7 @@ struct SlowEntropyEncoder {
     uint32_t bit_depth = 0;
     void init(uint32_t bd, uint32_t w) {
         weight = (double)(w - 1) / (double)w;
-        weight2 = 1.0 / (double)w;
+        weight2 = 1.0 - weight;   // matches decoder's derivation (1-ULP off vs 1/w); see decoder fix
         bit_depth = bd;
         master.init(32u, 0x8000u);
     }
@@ -164,8 +164,8 @@ struct SlowEntropyEncoder {
             enc.encode_uniform(remaining, (uint32_t)(total_bits - new_bits));
             enc.encode_bits((uint32_t)total_bits, raw_val - (1u << total_bits));
         }
-        uint32_t var_raw = (raw_val > 0x3fffffffu) ? 0x3fffffffu : raw_val;
-        var = var * weight + (double)var_raw * weight2;
+        // no clamp: raw_val is always treated as non-negative, matching the decoder fix
+        var = var * weight + (double)(uint64_t)raw_val * weight2;
     }
 };
 
@@ -377,7 +377,8 @@ bool ofr_encode_mono(const int32_t* samples, uint32_t n, uint32_t samplerate, in
         pd.init(ORDER, INTERVAL, (double)(WPRED - 1) / (double)WPRED);
         pd.min_val = mn; pd.max_val = mx; pd.shift = sh;
         for (uint32_t i = 0; i < n; i++) {
-            int p = (int)std::round(pd.predict());
+            double rounded = std::round(pd.predict());
+            int p = (rounded < -2147483648.0 || rounded > 2147483647.0) ? INT32_MIN : (int)rounded;
             int cp = std::max(mn, std::min(p, mx));
             int v = samples[i];
             int err = ((v - cp) << sh) >> sh;
