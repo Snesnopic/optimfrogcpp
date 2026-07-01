@@ -18,6 +18,38 @@ static int ofr_bitlen(int mn, int mx) {
     return (int)(bits + 2u + (u > 1u ? 1u : 0u));
 }
 
+// FUN_00016f10 (post=1 coded-range reduction): faithful port. The reference picks between
+// two precisions depending on whether min/max fit a safe +-2^23 range:
+//   - narrow: 32-bit division, mult used as its native SIGNED int32 value.
+//   - wide:   64-bit division, mult zero-extended to an UNSIGNED 64-bit value.
+// (The final value*mult+offset reconstruction is insensitive to this distinction --
+// value*mult and value*(mult+2^32) are congruent mod 2^32, and the result is always
+// truncated back to int32 -- but the DIVISION here is not, so getting this wrong silently
+// produces a different quotient whenever the truncated-mod-2^32 coincidence doesn't hold.)
+// Both paths apply a floor adjustment to the min result (quotient -1 when the remainder is
+// negative) and a ceil adjustment to the max result (quotient +1 when the remainder is
+// positive), matching the exact `sarl $0x1f; addl` / `test; jle; incl` sequences in the binary.
+static void ofr_reduce_range(int min_val, int max_val, int offset, int mult, int& out_min, int& out_max) {
+    bool wide = (min_val < -0x800000) || (max_val >= 0x800000);
+    if (wide) {
+        int64_t divisor = (int64_t)(uint32_t)mult;  // zero-extend
+        int64_t a_min = (int64_t)min_val - (int64_t)offset;
+        int64_t q_min = a_min / divisor, r_min = a_min % divisor;
+        out_min = (int32_t)(q_min + (r_min < 0 ? -1 : 0));
+        int64_t a_max = (int64_t)max_val - (int64_t)offset;
+        int64_t q_max = a_max / divisor, r_max = a_max % divisor;
+        out_max = (int32_t)(r_max > 0 ? q_max + 1 : q_max);
+    } else {
+        int32_t divisor = mult;  // native signed
+        int32_t a_min = min_val - offset;
+        int32_t q_min = a_min / divisor, r_min = a_min % divisor;
+        out_min = q_min + (r_min < 0 ? -1 : 0);
+        int32_t a_max = max_val - offset;
+        int32_t q_max = a_max / divisor, r_max = a_max % divisor;
+        out_max = (r_max > 0 ? q_max + 1 : q_max);
+    }
+}
+
 OFR_DecoderEngine::~OFR_DecoderEngine() {}
 
 
@@ -206,13 +238,9 @@ uInt32_t OFR_DecoderEngine::read(void* dest, uInt32_t count) {
                 int mnL = pp->min_val_L, mxL = pp->max_val_L;
                 int mnR = pp->min_val_R, mxR = pp->max_val_R;
                 if (post_type == 1) {
-                    mnL = (pp->min_val_L - pp->offset_L) / pp->mult_L;
-                    mxL = (pp->max_val_L - pp->offset_L) / pp->mult_L;
-                    if (mnL > mxL) std::swap(mnL, mxL);
+                    ofr_reduce_range(pp->min_val_L, pp->max_val_L, pp->offset_L, pp->mult_L, mnL, mxL);
                     if (this->channels == 2) {
-                        mnR = (pp->min_val_R - pp->offset_R) / pp->mult_R;
-                        mxR = (pp->max_val_R - pp->offset_R) / pp->mult_R;
-                        if (mnR > mxR) std::swap(mnR, mxR);
+                        ofr_reduce_range(pp->min_val_R, pp->max_val_R, pp->offset_R, pp->mult_R, mnR, mxR);
                     }
                 }
                 // write the reduced range back so the predictor clamps in coded space
