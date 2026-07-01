@@ -1,9 +1,0 @@
-@@ -231,6 +231,8 @@
-         if (this->block_decoder.predictor) {
-             this->block_decoder.predictor->init_from_bitstream(&this->range_coder);
-         }
-+        
-+        printf("CPP Range after Predictor init: value=%x range=%x\n", this->range_coder.value, this->range_coder.range);
-     }
- 
-     // Decode block

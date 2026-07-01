@@ -1,8 +1,0 @@
-@@ -216,6 +216,7 @@
-         this->bitstream.init(&this->data_bs);
-         
-         this->block_decoder.init_from_bitstream(&this->bitstream);
-+        printf("Bits consumed before start_decoding: %u\n", this->bitstream.total_bits_read);
-         
-         // Start RangeCoder
-         this->range_coder.start_decoding(&this->bitstream);

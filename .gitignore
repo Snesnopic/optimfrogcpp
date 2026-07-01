@@ -1,1 +1,12 @@
 build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+.idea/
+.DS_Store
+research_archive/
+*.o
+*.dSYM/
+test.raw

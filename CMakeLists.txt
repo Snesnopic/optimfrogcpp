@@ -8,24 +8,24 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math")
 include_directories(include)
 
 add_library(optimfrogcpp_lib
-    src/optimfrog.cpp
-    src/optimfrog_decoder.cpp
-    src/optimfrog_decoder_entropy.cpp
-    src/optimfrog_decoder_predictor.cpp
-    src/optimfrog_decoder_pred3.cpp
-    src/optimfrog_decoder_ent3.cpp
-    src/optimfrog_decoder_post2.cpp
+    src/core/optimfrog.cpp
+    src/core/optimfrog_decoder.cpp
+    src/core/optimfrog_decoder_entropy.cpp
+    src/core/optimfrog_decoder_predictor.cpp
+    src/core/optimfrog_decoder_pred3.cpp
+    src/core/optimfrog_decoder_ent3.cpp
+    src/core/optimfrog_decoder_post2.cpp
+    src/core/optimfrog_encoder.cpp
 )
 
 # float math that must NOT be reordered/contracted by -ffast-math (bit-exactness vs the binary,
 # which was built -fno-fast-math). pred3 cascade + the mono predictor weight-update/LDLT.
-set_source_files_properties(src/optimfrog_decoder_pred3.cpp src/optimfrog_decoder_predictor.cpp PROPERTIES
+set_source_files_properties(src/core/optimfrog_decoder_pred3.cpp src/core/optimfrog_decoder_predictor.cpp PROPERTIES
     COMPILE_OPTIONS "-fno-fast-math;-ffp-contract=off")
 
-add_executable(optimfrogcpp src/main.cpp)
+add_executable(optimfrogcpp src/cli/main.cpp)
 target_link_libraries(optimfrogcpp optimfrogcpp_lib)
 
 # encoder CLI (mono 16-bit lossless, pred=1/ent=1/post=1)
-add_executable(ofrenc src/optimfrog_encoder.cpp)
-target_compile_definitions(ofrenc PRIVATE OFRENC_MAIN)
+add_executable(ofrenc src/cli/ofrenc_main.cpp)
 target_link_libraries(ofrenc optimfrogcpp_lib)

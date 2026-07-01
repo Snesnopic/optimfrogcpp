@@ -55,8 +55,8 @@ dirA() {
 
 # direction B: our encode (default + best) -> reference decode -> must equal original
 dirB() {
-  local raw="$1" ch="$2" bps="$3" rate="$4" tag="$5"
-  for mode in default best ent2 pred3; do
+  local raw="$1" ch="$2" bps="$3" rate="$4" tag="$5" modes="$6"
+  for mode in $modes; do
     local of="$WORK/tmp/b.ofr" rr="$WORK/tmp/b_ref.raw"
     case $mode in
       default) rtry_out "$of" env -u OFR_BEST OFR_PRED=1 OFR_ENT=1 "$OFRENC" "$raw" "$of" "$rate" "$ch" "$bps";;
@@ -70,9 +70,9 @@ dirB() {
   done
 }
 
-run_raw() { # path ch bps rate tag plist
+run_raw() { # path ch bps rate tag plist bmodes
   dirA "$1" "$2" "$3" "$4" "$5" "$6"
-  dirB "$1" "$2" "$3" "$4" "$5"
+  dirB "$1" "$2" "$3" "$4" "$5" "$7"
 }
 
 echo "=== preparing corpus (raw) ==="
@@ -99,6 +99,9 @@ SYNTH_PRESETS="${SYNTH_PRESETS:-$PRESETS}"
 CORPUS_PRESETS="${CORPUS_PRESETS:-$PRESETS}"
 HEAVYPRESETS="${HEAVYPRESETS:-10 max}"
 HEAVYN="${HEAVYN:-9999}"
+SYNTH_BMODES="${SYNTH_BMODES:-default best ent2 pred3}"
+CORPUS_BMODES="${CORPUS_BMODES:-default best ent2 pred3}"
+CORPUS_BMODES_LIGHT="${CORPUS_BMODES_LIGHT:-default ent2 pred3}"
 
 is_heavy() { case " $HEAVYPRESETS " in *" $1 "*) return 0;; *) return 1;; esac; }
 
@@ -111,16 +114,18 @@ for bps in $BPSLIST; do
     fbps=$(echo "$base" | sed -E 's/.*__([0-9]+)bps\.raw/\1/')
     [ "$fbps" = "$bps" ] || continue
     fch=$(echo "$base" | sed -E 's/.*__([0-9]+)ch__.*/\1/')
+    bmodes="$SYNTH_BMODES"
     case "$r" in
-      */raw/*)  # corpus: drop heavy presets past HEAVYN files
+      */raw/*)  # corpus: drop heavy presets/modes past HEAVYN files
         plist=""; for p in $CORPUS_PRESETS; do
           if is_heavy "$p" && [ "$ci" -ge "$HEAVYN" ]; then continue; fi
           plist="$plist $p"
         done
+        if [ "$ci" -ge "$HEAVYN" ]; then bmodes="$CORPUS_BMODES_LIGHT"; else bmodes="$CORPUS_BMODES"; fi
         ci=$((ci+1));;
       *) plist="$SYNTH_PRESETS";;
     esac
-    run_raw "$r" "$fch" "$bps" 44100 "$base" "$plist"
+    run_raw "$r" "$fch" "$bps" 44100 "$base" "$plist" "$bmodes"
   done
 done
 

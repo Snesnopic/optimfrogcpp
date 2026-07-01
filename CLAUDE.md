@@ -8,27 +8,43 @@ Part of the chisel ecosystem.
 
 ```
 src/
-  main.cpp
-  optimfrog.cpp                        — top-level decode pipeline
-  optimfrog_decoder.cpp                — block decode orchestration
-  optimfrog_decoder_entropy.cpp        — entropy decoding (RangeCoder, Huffman)
-  optimfrog_decoder_predictor.cpp      — predictor (mono complete; stereo in progress)
+  cli/
+    main.cpp                           — decoder CLI (optimfrogcpp)
+    ofrenc_main.cpp                    — encoder CLI (ofrenc)
+  core/
+    optimfrog.cpp                      — top-level decode pipeline
+    optimfrog_decoder.cpp              — block decode orchestration
+    optimfrog_decoder_entropy.cpp      — entropy decoding (ent=1 fast, ent=2 slow)
+    optimfrog_decoder_predictor.cpp    — predictor (pred=1 LPC, mono + stereo)
+    optimfrog_decoder_pred3.cpp        — predictor (pred=3 cascade NLMS, mono + stereo)
+    optimfrog_decoder_ent3.cpp         — entropy (ent=3 ACM)
+    optimfrog_decoder_post2.cpp        — post-processor (post=2 value-remap)
+    optimfrog_encoder.cpp              — encoder (pure library, no CLI main)
 include/
   OptimFROG.h                          — public API (from original header)
   OptimFROGDecoder.h                   — decoder interface
   optimfrog_decoder.h                  — internal decoder structs
+  optimfrog_encoder.h                  — encoder structs + public entry points
   optimfrog_tables.h
   PortableTypes.h, SystemID.h
+tests/
+  conformance/                         — bidirectional suite vs the reference binaries
+  enc_rt_test.cpp                      — manual range-encoder round-trip test tool
+doc/                                   — RE notes and format documentation (see doc/README.md)
+research_archive/                      — historical RE scratch (LLDB scripts, disasm dumps,
+                                          throwaway test binaries); gitignored, kept locally only
 ```
 
-No CMakeLists.txt at time of move — build system uses the root Makefile.
+Build: `cmake -B build && cmake --build build` (see root `README.md`).
 
 ## RE methodology
 
 Analysis of `libOptimFROG.dylib` is done dynamically via LLDB Python scripts
-(`test_lldb_*.py` in project root). Scripts extract internal variable state and
-intermediate vectors during real binary execution, then compare against C++ output
-sample-by-sample. Ghidra is also available for static RE (`libofr.asm`, `dump.asm`).
+(archived under `research_archive/root_scratch/test_lldb_*.py` — historical, one-off
+investigation scripts; new investigations write fresh throwaway scripts as needed rather than
+reusing these). Scripts extract internal variable state and intermediate vectors during real
+binary execution, then compare against C++ output sample-by-sample. Ghidra is also available
+for static RE (`research_archive/root_scratch/libofr.asm`, `dump.asm`).
 
 Reference files:
 - `sine_mono.ofr` — mono test file (validated)
@@ -83,13 +99,13 @@ reference encoder's choices, only be valid and self-consistent.
   (LSB-first 12-bit chunks), `encode_split`, `encode_symbol` (dual of `decode_symbol`: replicate the
   exact tree walk + freq +2 updates by navigating the path bits of `num_nodes+sym`), `encode_golomb`
   (note: this golomb never emits 1 — values are 0,2,3,4,…), `flush` (5× shift_low).
-- **Round-trip test**: `src/enc_rt_test.cpp` — encode 300k mixed ops, decode with the real
+- **Round-trip test**: `tests/enc_rt_test.cpp` — encode 300k mixed ops, decode with the real
   `OFR_RangeCoder` + parallel `OFR_ModelContext`, **0 mismatches**. Build:
-  `clang++ -std=c++17 -O2 -Iinclude src/enc_rt_test.cpp build/liboptimfrogcpp_lib.a -o /tmp/enc_rt`.
+  `clang++ -std=c++17 -O2 -Iinclude tests/enc_rt_test.cpp build/liboptimfrogcpp_lib.a -o /tmp/enc_rt`.
 - `ofr` (the official CLI encoder) imported into Ghidra (stripped, statically linked, ~107 fns found
   by auto-analysis — incomplete). Not the primary source; the decoder format IS the spec.
 
-- **WORKING mono + stereo encoder** (`src/optimfrog_encoder.cpp`, `ofr_encode_mono16` /
+- **WORKING mono + stereo encoder** (`src/core/optimfrog_encoder.cpp`, `ofr_encode_mono16` /
   `ofr_encode_stereo16` + `ofrenc` CLI): 16-bit, pred=1 / ent=1 (fast) / post=1 (identity). Output is
   **bit-exact lossless** when decoded by BOTH our decoder and the **official reference decoder**
   (`/tmp/ref_gen`), verified on diverse signals (sine, music, white noise, full-range), mono AND stereo.

@@ -58,16 +58,14 @@ Takes the predictor output and applies final mapping.
 
 ## 3. Current Decompilation Status
 
-**Estimated Completion: 40% - 50%**
+This section is a historical snapshot from early in the project (mono-only, single-file
+verification). It's kept for context on how the investigation progressed, but is **no longer
+accurate** — see [status.md](status.md) for the current, verified coverage matrix (both
+decoder and encoder, mono+stereo, 8/16/24/32-bit, all predictor/entropy/post-processor types,
+proven via a bidirectional conformance suite against the reference binaries rather than a single
+hand-picked file).
 
-### Achieved:
-✅ **Bit-Exact Parity on Mono Path:** The `OFR_RangeCoder`, `OFR_EntropyDecoder` (Type 2), and `OFR_Predictor` (Mono) have been decompiled into C++.
-✅ Verified mathematically: Feeding the compressed payload of `sine_mono.ofr` into our C++ pipeline produces an output buffer that is **100% bit-exact** compared to the proprietary `libOptimFROG.dylib` output.
-✅ Fixed the tricky floating-point/integer math scaling issues in the Predictor's LDLT factorization.
-✅ Reverse-engineered the bit-shift operations for the Escape path in the Entropy decoder.
-
-### Remaining To-Do List:
-1. **Dynamic Integration Parsing:** In `sine_mono`, integration was hardcoded to 1. We must verify if the integration loop count is determined dynamically by `pred_type` or read directly from the bitstream (potentially the mysterious `uVar8`/`bVar2` flags).
-2. **Stereo Prediction Testing:** The `PredictorStereo` and `PredictorFastStereo` code exists but requires rigorous bit-exact parity testing against a `.ofr` stereo file.
-3. **Entropy/PostProcessor Types:** Type 1 Entropy and advanced PostProcessor mappings need to be mapped out.
-4. **Full File Parsing Loop:** Implement the sequential block reader logic (`read()` loop) to successfully extract the ID3 tags, validate CRC-8 chunk checksums, and concatenate the chunks correctly.
+Everything the early to-do list below asked for has since been resolved: predictor
+integration/shift is read from the bitstream (not hardcoded), stereo prediction (both the fast
+and cascade paths) is bit-exact, all three entropy types and both post-processor types are
+implemented, and the block reader handles the full multi-block real-audio case.
