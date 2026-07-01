@@ -1,5 +1,6 @@
 #include "optimfrog_tables.h"
 #include "../../include/optimfrog_decoder.h"
+#include <cmath>
 
 // Left-shifting a negative int is UB pre-C++20 (well-defined two's-complement wraparound only
 // from C++20 on); this codebase's shift-wrap trick relies on exactly that wraparound (matching

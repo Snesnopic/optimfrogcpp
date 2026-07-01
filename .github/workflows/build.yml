@@ -20,7 +20,7 @@ jobs:
             asset_name: optimfrogcpp-linux-x64
 
           - name: macOS Intel
-            os: macos-13
+            os: macos-15-intel
             asset_name: optimfrogcpp-darwin-x64
 
           - name: macOS ARM64

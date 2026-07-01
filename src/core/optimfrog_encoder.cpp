@@ -5,9 +5,13 @@
 #include "optimfrog_tables.h"
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
 
 // Emulates the x86 cvtsd2si "integer indefinite" behavior (see the matching decoder-side
 // helper in optimfrog_decoder_predictor.cpp for the full rationale): when a prediction
@@ -22,6 +26,17 @@ static inline int32_t round_to_int32_cvtsd2si(double x) {
 // Left-shifting a negative int is UB pre-C++20; see the identical helper + rationale in
 // optimfrog_decoder_predictor.cpp. Routes the shift-wrap trick through an unsigned shift.
 static inline int32_t shl_wrap(int32_t x, int sh) { return (int32_t)((uint32_t)x << sh); }
+
+// portable count-leading-zeros for x != 0 (MSVC has no __builtin_clz)
+static inline uint32_t clz_u32(uint32_t x) {
+#if defined(_MSC_VER)
+    unsigned long idx;
+    _BitScanReverse(&idx, x);
+    return 31u - (uint32_t)idx;
+#else
+    return (uint32_t)__builtin_clz(x);
+#endif
+}
 
 // FUN_00018d80 port (same as decoder's ofr_bitlen)
 static int ofr_bitlen(int mn, int mx) {
@@ -92,7 +107,7 @@ struct FastEntropyEncoder {
         uint32_t symbol, group = 0, extra = 0;
         if (value < 8u) { symbol = value; }
         else {
-            uint32_t lg = 31u - __builtin_clz(value);   // floor(log2(value))
+            uint32_t lg = 31u - clz_u32(value);   // floor(log2(value))
             group = lg - 3u;
             uint32_t r = value - (1u << (group + 3u));
             uint32_t j = r >> group;
@@ -125,7 +140,7 @@ struct FastEntropyEncoder {
 };
 
 // ---- slow entropy encoder (dual of OFR_EntropyDecoder::decode_one_sample, FUN_00109ab0) ----
-static inline int floor_log2_u(uint32_t x) { return 31 - __builtin_clz(x); }
+static inline int floor_log2_u(uint32_t x) { return 31 - (int)clz_u32(x); }
 struct SlowEntropyEncoder {
     OFR_ModelContext master;   // 32-symbol tree (leaves == num_nodes == 32), increment 2
     double weight = 0, weight2 = 0;
