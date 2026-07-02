@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# IEEE Float (.off) decoder conformance suite -- direction A only (decode-side): the official
-# `off` encoder produces the .ofr file, our decoder decodes it, and the result must equal the
-# original raw float32 PCM bit-for-bit. No reference *decoder* is needed here (unlike the
-# lossless suite) since libOptimFROG's shared library cannot open .off files at all -- comparing
-# against the original raw samples directly is both necessary and sufficient. We don't have a
-# Float encoder yet, so there is no direction B for this format.
+# IEEE Float (.off) conformance suite -- bidirectional:
+#   A) the official `off` encoder produces the .ofr file, our decoder decodes it, must equal
+#      the original raw float32 PCM bit-for-bit.
+#   B) our encoder (ofrenc --float) produces the .ofr file, the official `off` decoder decodes
+#      it, must equal the original bit-for-bit.
+# Neither direction needs libOptimFROG's shared library (which can't open .off files at all) --
+# comparing against the original raw samples directly is both necessary and sufficient.
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OFF="${OFF:-$HOME/Downloads/OptimFROG_OSX_x64_5100/off}"
 OFR="${OFR_DECODER:-$ROOT/build/ofr}"
+OFRENC="${OFRENC:-$ROOT/build/ofrenc}"
 WORK="${WORK:-/tmp/conformance_float}"
 
 mkdir -p "$WORK/synth" "$WORK/tmp"
@@ -31,7 +33,7 @@ fi
 echo "=== preparing float synthetic corpus ==="
 python3 "$ROOT/tests/conformance/gen_synthetic_float.py" "$WORK/synth" >/dev/null
 
-echo "=== running (dir A only: off encode -> our decode -> must equal original) ==="
+echo "=== running (dir A: off encode -> our decode -> must equal original) ==="
 for raw in "$WORK"/synth/*__*ch__float32.raw; do
   [ -f "$raw" ] || continue
   base=$(basename "$raw")
@@ -40,14 +42,35 @@ for raw in "$WORK"/synth/*__*ch__float32.raw; do
 
   of="$WORK/tmp/a.off.ofr" ours="$WORK/tmp/a_our.raw"
   rtry_out "$of" "$OFF" --encode --raw --channelconfig "$cc" --sampletype FLOAT32_1 --rate 44100 "$raw" --output "$of" --overwrite
-  if [ ! -s "$of" ]; then note "enc $base (no off output)"; continue; fi
+  if [ ! -s "$of" ]; then note "A enc $base (no off output)"; continue; fi
 
   rm -f "$ours"
   rtry_out "$ours" "$OFR" --decode --raw "$of" --output "$ours" --overwrite
-  if [ ! -s "$ours" ]; then note "dec $base (no our-decoder output)"; continue; fi
+  if [ ! -s "$ours" ]; then note "A dec $base (no our-decoder output)"; continue; fi
 
-  if ! cmp -s "$raw" "$ours"; then note "$base (ours != original)"; else ok; fi
+  if ! cmp -s "$raw" "$ours"; then note "A $base (ours != original)"; else ok; fi
 done
+
+if [ -x "$OFRENC" ]; then
+  echo "=== running (dir B: our encode -> off decode -> must equal original) ==="
+  for raw in "$WORK"/synth/*__*ch__float32.raw; do
+    [ -f "$raw" ] || continue
+    base=$(basename "$raw")
+    ch=$(echo "$base" | sed -E 's/.*__([0-9]+)ch__.*/\1/')
+
+    of="$WORK/tmp/b.our.ofr" refdec="$WORK/tmp/b_ref.raw"
+    rtry_out "$of" "$OFRENC" "$raw" "$of" 44100 "$ch" 16 --float
+    if [ ! -s "$of" ]; then note "B enc $base (no our-encoder output)"; continue; fi
+
+    rm -f "$refdec"
+    rtry_out "$refdec" "$OFF" --decode --raw "$of" --output "$refdec" --overwrite
+    if [ ! -s "$refdec" ]; then note "B dec $base (no off-decoder output)"; continue; fi
+
+    if ! cmp -s "$raw" "$refdec"; then note "B $base (off-decoded != original)"; else ok; fi
+  done
+else
+  echo "ofrenc not found at $OFRENC -- skipping direction B"
+fi
 
 echo "=== RESULTS ==="
 echo "PASS=$pass FAIL=$fail"

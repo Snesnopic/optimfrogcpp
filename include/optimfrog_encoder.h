@@ -13,6 +13,12 @@ bool ofr_encode_mono(const int32_t* samples, uint32_t n, uint32_t samplerate, in
 bool ofr_encode_stereo(const int32_t* samples, uint32_t frames, uint32_t samplerate, int bps, std::vector<uint8_t>& file,
                         const std::vector<uint8_t>& head = {}, const std::vector<uint8_t>& tail = {});
 
+// IEEE Float (.off, "OFRX") encoders (src/core/optimfrog_encoder_float.cpp).
+bool ofr_encode_mono_float(const float* samples, uint32_t n, uint32_t samplerate, std::vector<uint8_t>& file,
+                            const std::vector<uint8_t>& head = {}, const std::vector<uint8_t>& tail = {});
+bool ofr_encode_stereo_float(const float* samples, uint32_t frames, uint32_t samplerate, std::vector<uint8_t>& file,
+                              const std::vector<uint8_t>& head = {}, const std::vector<uint8_t>& tail = {});
+
 // range encoder: exact dual of OFR_RangeCoder (decoder). 31-bit window to match the
 // decoder's post-init range of 0x80000000 (7-bit init + byte renorm at 0x800001).
 // carry-counting byte emission (cache + run-of-0xff).

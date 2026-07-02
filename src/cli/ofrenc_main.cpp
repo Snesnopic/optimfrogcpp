@@ -22,12 +22,42 @@ static void enc_one(const std::vector<int32_t>& s, uint32_t nvals, uint32_t rate
 }
 
 int main(int argc, char** argv) {
-    if (argc < 4) { fprintf(stderr, "usage: %s in.raw out.ofr samplerate [channels=1] [bps=16]\n  (set OFR_BEST=1 to search configs)\n", argv[0]); return 2; }
-    int ch = (argc >= 5) ? atoi(argv[4]) : 1;
-    int bps = (argc >= 6) ? atoi(argv[5]) : 16;
-    uint32_t rate = (uint32_t)atoi(argv[3]);
+    // --float: encode a raw float32 PCM file (IEEE Float / "OFRX") instead of integer PCM.
+    // Consumes one positional slot less (no bps arg, always 32-bit float samples).
+    bool want_float = false;
+    std::vector<char*> pos;
+    for (int i = 1; i < argc; i++) {
+        if (std::string(argv[i]) == "--float") want_float = true;
+        else pos.push_back(argv[i]);
+    }
+    if (pos.size() < 3) {
+        fprintf(stderr, "usage: %s in.raw out.ofr samplerate [channels=1] [bps=16] [--float]\n  (set OFR_BEST=1 to search configs; --float ignores bps, always 32-bit float)\n", argv[0]);
+        return 2;
+    }
+    int ch = (pos.size() >= 4) ? atoi(pos[3]) : 1;
+    uint32_t rate = (uint32_t)atoi(pos[2]);
+
+    if (want_float) {
+        FILE* f = fopen(pos[0], "rb");
+        if (!f) { perror("in"); return 1; }
+        fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
+        std::vector<float> s(sz / 4);
+        fread(s.data(), 4, s.size(), f); fclose(f);
+
+        std::vector<uint8_t> out;
+        bool ok = (ch == 2) ? ofr_encode_stereo_float(s.data(), (uint32_t)(s.size() / 2), rate, out)
+                             : ofr_encode_mono_float(s.data(), (uint32_t)s.size(), rate, out);
+        if (!ok) { fprintf(stderr, "float encode failed\n"); return 1; }
+        FILE* g = fopen(pos[1], "wb");
+        if (!g) { perror("out"); return 1; }
+        fwrite(out.data(), 1, out.size(), g); fclose(g);
+        fprintf(stderr, "wrote %zu bytes (ch=%d, float32)\n", out.size(), ch);
+        return 0;
+    }
+
+    int bps = (pos.size() >= 5) ? atoi(pos[4]) : 16;
     int bytes = bps / 8;
-    FILE* f = fopen(argv[1], "rb");
+    FILE* f = fopen(pos[0], "rb");
     if (!f) { perror("in"); return 1; }
     fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
     std::vector<uint8_t> raw(sz);
@@ -72,7 +102,7 @@ int main(int argc, char** argv) {
     } else {
         enc_one(s, nvals, rate, ch, bps, out);
     }
-    FILE* g = fopen(argv[2], "wb");
+    FILE* g = fopen(pos[1], "wb");
     if (!g) { perror("out"); return 1; }
     fwrite(out.data(), 1, out.size(), g); fclose(g);
     fprintf(stderr, "wrote %zu bytes (ch=%d bps=%d)\n", out.size(), ch, bps);

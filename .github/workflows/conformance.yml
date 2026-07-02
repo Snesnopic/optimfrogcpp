@@ -11,11 +11,13 @@ name: Conformance
 #
 # Linux job: runs BOTH directions natively, no wine/emulation needed.
 #
-# Both jobs additionally run the Float (.off) decoder suite (tests/conformance/run_float.sh):
-# the official `off` encoder produces test files, our decoder decodes them, and the result must
-# equal the original raw float32 PCM bit-for-bit. No reference *decoder* is involved there (the
-# shared libOptimFROG library cannot open .off files at all), so this doesn't depend on which
-# direction the main lossless suite runs in.
+# Both jobs additionally run the Float (.off) suite (tests/conformance/run_float.sh), which is
+# bidirectional on its own and doesn't depend on which direction the main lossless suite runs in
+# (neither direction needs libOptimFROG, which can't open .off files at all):
+#   A) the official `off` encoder produces test files, our decoder decodes them, must equal the
+#      original raw float32 PCM bit-for-bit.
+#   B) our encoder (ofrenc --float) produces test files, the official `off` decoder decodes them,
+#      must equal the original bit-for-bit.
 
 on:
   push:

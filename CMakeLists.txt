@@ -25,6 +25,7 @@ add_library(optimfrogcpp_lib
     src/core/optimfrog_decoder_post2.cpp
     src/core/optimfrog_decoder_float.cpp
     src/core/optimfrog_encoder.cpp
+    src/core/optimfrog_encoder_float.cpp
     src/core/optimfrogcpp.cpp
 )
 
