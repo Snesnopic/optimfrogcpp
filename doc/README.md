@@ -13,3 +13,20 @@
   coder (`entropy_type=3`, preset max).
 - [post2_remap_analysis.md](post2_remap_analysis.md) — deep dive: value-remap post-processor
   (`post_type=2`, active for tonal/synthetic signals).
+
+## Mirrored from losslessaudio.org
+
+Reference material from the official project's own site, kept here so it survives independent
+of the site staying up. Covers the format/algorithm/project itself, not the site or its author.
+
+- [changelog.md](changelog.md) — full version history (OFR/OFS/OFF), verbatim.
+- [features.md](features.md) — shipped feature list + the official "in progress" wishlist
+  (useful for scoping what's worth reimplementing here vs. never-shipped).
+- [dualstream.md](dualstream.md) — OptimFROG DualStream (OFS, lossy+correction) background,
+  for the not-yet-started DualStream reimplementation.
+- [ieee_float.md](ieee_float.md) — OptimFROG IEEE Float (OFF) background, for the not-yet-started
+  Float reimplementation.
+- [sdk_reference.md](sdk_reference.md) — SDK return codes and interface-layer notes not already
+  captured verbatim in `include/OptimFROG.h`.
+- [license.md](license.md) — official OptimFROG license terms and how this repo complies
+  (no reference binaries committed; CI fetches them at run time, sha1-verified).
