@@ -6,7 +6,7 @@
 #include "OptimFROG.h"
 
 static int run(int argc, char** argv) {
-    std::cout << "OptimFROGcpp Decoder v" << OptimFROG_getVersion() << std::endl;
+    std::cout << "ofrdecomp Decoder v" << OptimFROG_getVersion() << std::endl;
 
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <input.ofr>" << std::endl;

@@ -1,4 +1,4 @@
-# optimfrogcpp
+# ofrdecomp
 
 A from-scratch C++ decompilation and reimplementation of the [OptimFROG](http://losslessaudio.org/)
 lossless audio codec, reverse-engineered from the closed-source reference binary
@@ -41,7 +41,7 @@ Produces three binaries in `build/`:
   Supports `--preset {0-10,max}`, `--raw` + `--channelconfig`/`--sampletype`/`--rate` (headerless
   PCM), WAV in/out by default, `--output`, `--overwrite`, `--silent`, `--help`. Skips the original's
   rarely-used flags (`--selfextract`, `--deleteafter`, `--timestamp`, `--incorrectheader`, ...).
-- `optimfrogcpp` / `ofrenc` — the original minimal single-purpose CLIs (decode-only /
+- `ofrdecomp` / `ofrenc` — the original minimal single-purpose CLIs (decode-only /
   positional-args encode), kept for backward compatibility with existing scripts.
 
 ## Repository layout

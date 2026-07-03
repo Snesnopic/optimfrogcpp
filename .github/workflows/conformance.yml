@@ -58,7 +58,7 @@ jobs:
       - name: Decode sanity check (sine_mono / test_stereo, MD5 known-good)
         run: |
           check() {
-            ./build/optimfrogcpp "$1"
+            ./build/ofrdecomp "$1"
             got=$(python3 -c "import hashlib;print(hashlib.md5(open('test.raw','rb').read()).hexdigest())")
             [ "$got" = "$2" ] || { echo "MD5 mismatch for $1: got $got want $2"; exit 1; }
           }
@@ -73,7 +73,7 @@ jobs:
       - name: Run conformance suite (direction B, synthetic corpus only)
         env:
           OFRENC: ${{ github.workspace }}/build/ofrenc
-          ODEC: ${{ github.workspace }}/build/optimfrogcpp
+          ODEC: ${{ github.workspace }}/build/ofrdecomp
           REFGEN: ${{ runner.temp }}/ref_gen
           DYLIBDIR: ${{ env.OFR_REF_LIBDIR }}
           NFILES: 0
@@ -121,7 +121,7 @@ jobs:
       - name: Decode sanity check (sine_mono / test_stereo, MD5 known-good)
         run: |
           check() {
-            ./build/optimfrogcpp "$1"
+            ./build/ofrdecomp "$1"
             got=$(python3 -c "import hashlib;print(hashlib.md5(open('test.raw','rb').read()).hexdigest())")
             [ "$got" = "$2" ] || { echo "MD5 mismatch for $1: got $got want $2"; exit 1; }
           }
@@ -146,7 +146,7 @@ jobs:
         env:
           OFR: ${{ env.OFR_REF }}
           OFRENC: ${{ github.workspace }}/build/ofrenc
-          ODEC: ${{ github.workspace }}/build/optimfrogcpp
+          ODEC: ${{ github.workspace }}/build/ofrdecomp
           REFGEN: ${{ runner.temp }}/ref_gen
           DYLIBDIR: ${{ env.OFR_REF_LIBDIR }}
           NFILES: 0

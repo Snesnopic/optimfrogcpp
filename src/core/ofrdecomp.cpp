@@ -1,10 +1,10 @@
-#include "../../include/optimfrogcpp.hpp"
+#include "../../include/ofrdecomp.hpp"
 #include "../../include/OptimFROG.h"
 #include "../../include/optimfrog_encoder.h"
 #include <algorithm>
 #include <cstring>
 
-namespace optimfrogcpp {
+namespace ofrdecomp {
 
 DecodeError::~DecodeError() = default;
 
@@ -124,4 +124,4 @@ std::vector<uint8_t> encodeStereo(std::span<const int32_t> interleaved, uint32_t
 }
 
 } // namespace Encoder
-} // namespace optimfrogcpp
+} // namespace ofrdecomp

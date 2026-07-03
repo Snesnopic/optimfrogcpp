@@ -3,11 +3,11 @@
 // std::span/vector instead of manual create/destroy + raw pointers. Does not touch the
 // bit-exact core -- see OptimFROG.h for the SDK-compatible flat API this project also exposes.
 
-/// \file optimfrogcpp.hpp
+/// \file ofrdecomp.hpp
 /// \brief Namespaced, RAII, exception-based C++ facade for the OptimFROG decoder/encoder.
 
-#ifndef OPTIMFROGCPP_HPP
-#define OPTIMFROGCPP_HPP
+#ifndef OFRDECOMP_HPP
+#define OFRDECOMP_HPP
 
 #include <cstdint>
 #include <span>
@@ -16,7 +16,7 @@
 #include <vector>
 
 /// \brief Modern C++ API for the OptimFROG codec (RAII decoder, stateless encoder helpers).
-namespace optimfrogcpp {
+namespace ofrdecomp {
 
 /// \brief Thrown by Decoder on open/read failures.
 ///
@@ -27,7 +27,7 @@ public:
     /// \param what human-readable description of the failure.
     /// \param code an OptimFROG_* result code (OptimFROG.h), or -1 if not applicable.
     DecodeError(const std::string& what, int code) : std::runtime_error(what), code_(code) {}
-    ~DecodeError() override; // out-of-line: anchors the vtable to optimfrogcpp.cpp
+    ~DecodeError() override; // out-of-line: anchors the vtable to ofrdecomp.cpp
 
     /// \return the OptimFROG_* result code associated with this failure, or -1.
     int code() const noexcept { return code_; }
@@ -130,6 +130,6 @@ namespace Encoder {
                                        std::span<const uint8_t> head = {}, std::span<const uint8_t> tail = {});
 } // namespace Encoder
 
-} // namespace optimfrogcpp
+} // namespace ofrdecomp
 
 #endif

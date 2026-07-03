@@ -17,34 +17,34 @@ jobs:
         include:
           - name: Ubuntu x64 GCC
             os: ubuntu-latest
-            asset_name: optimfrogcpp-linux-x64-gcc
+            asset_name: ofrdecomp-linux-x64-gcc
 
           - name: Ubuntu x64 Clang
             os: ubuntu-latest
             compiler_c: clang
             compiler_cxx: clang++
-            asset_name: optimfrogcpp-linux-x64-clang
+            asset_name: ofrdecomp-linux-x64-clang
 
           - name: Ubuntu ARM64 GCC
             os: ubuntu-24.04-arm
-            asset_name: optimfrogcpp-linux-arm64
+            asset_name: ofrdecomp-linux-arm64
 
           - name: macOS Intel
             os: macos-15-intel
-            asset_name: optimfrogcpp-darwin-x64
+            asset_name: ofrdecomp-darwin-x64
 
           - name: macOS ARM64
             os: macos-14
-            asset_name: optimfrogcpp-darwin-arm64
+            asset_name: ofrdecomp-darwin-arm64
 
           - name: Windows x64
             os: windows-latest
-            asset_name: optimfrogcpp-windows-x64
+            asset_name: ofrdecomp-windows-x64
 
           - name: Windows ARM64
             os: windows-latest
             cmake_args: -A ARM64
-            asset_name: optimfrogcpp-windows-arm64
+            asset_name: ofrdecomp-windows-arm64
             skip_sanity_check: true   # cross-compiled; host runner can't execute ARM64 binaries
 
     steps:
@@ -63,9 +63,9 @@ jobs:
         if: '!matrix.skip_sanity_check'
         shell: bash
         run: |
-          bin=build/optimfrogcpp
-          [ -f "build/Release/optimfrogcpp.exe" ] && bin=build/Release/optimfrogcpp.exe
-          [ -f "build/optimfrogcpp.exe" ] && bin=build/optimfrogcpp.exe
+          bin=build/ofrdecomp
+          [ -f "build/Release/ofrdecomp.exe" ] && bin=build/Release/ofrdecomp.exe
+          [ -f "build/ofrdecomp.exe" ] && bin=build/ofrdecomp.exe
           check() { # ofr_file expected_md5
             "$bin" "$1"
             got=$(python3 -c "import hashlib;print(hashlib.md5(open('test.raw','rb').read()).hexdigest())")
@@ -79,9 +79,9 @@ jobs:
         with:
           name: ${{ matrix.asset_name }}
           path: |
-            build/optimfrogcpp
+            build/ofrdecomp
             build/ofrenc
             build/ofr
-            build/Release/optimfrogcpp.exe
+            build/Release/ofrdecomp.exe
             build/Release/ofrenc.exe
             build/Release/ofr.exe

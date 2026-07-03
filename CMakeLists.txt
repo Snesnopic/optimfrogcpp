@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(optimfrogcpp CXX C)
+project(ofrdecomp CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD 99)
@@ -15,7 +15,7 @@ include_directories(include)
 # prebuilt OptimFROG.dll), so the SDK header's dllimport decoration is wrong here.
 add_compile_definitions(IMPORT_SYMBOL=)
 
-add_library(optimfrogcpp_lib
+add_library(ofrdecomp_lib
     src/core/optimfrog.cpp
     src/core/optimfrog_decoder.cpp
     src/core/optimfrog_decoder_entropy.cpp
@@ -27,7 +27,7 @@ add_library(optimfrogcpp_lib
     src/core/optimfrog_decoder_dualstream.cpp
     src/core/optimfrog_encoder.cpp
     src/core/optimfrog_encoder_float.cpp
-    src/core/optimfrogcpp.cpp
+    src/core/ofrdecomp.cpp
 )
 
 # float math that must NOT be reordered/contracted (bit-exactness vs the reference binary,
@@ -40,13 +40,13 @@ else()
         COMPILE_OPTIONS "-fno-fast-math;-ffp-contract=off")
 endif()
 
-add_executable(optimfrogcpp src/cli/main.cpp)
-target_link_libraries(optimfrogcpp optimfrogcpp_lib)
+add_executable(ofrdecomp src/cli/main.cpp)
+target_link_libraries(ofrdecomp ofrdecomp_lib)
 
 # encoder CLI (positional args: in.raw out.ofr rate [channels] [bps])
 add_executable(ofrenc src/cli/ofrenc_main.cpp)
-target_link_libraries(ofrenc optimfrogcpp_lib)
+target_link_libraries(ofrenc ofrdecomp_lib)
 
 # unified CLI aiming for usage/flag parity with the original `ofr` tool
 add_executable(ofr src/cli/ofr_main.cpp)
-target_link_libraries(ofr optimfrogcpp_lib)
+target_link_libraries(ofr ofrdecomp_lib)

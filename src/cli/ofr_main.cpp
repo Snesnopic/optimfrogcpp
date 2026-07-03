@@ -230,7 +230,7 @@ PresetConfig preset_config(const std::string& preset, int channels) {
 }
 
 void print_banner() {
-    fprintf(stderr, "optimfrogcpp CLI (interop reimplementation) -- see doc/status.md for coverage\n");
+    fprintf(stderr, "ofrdecomp CLI (interop reimplementation) -- see doc/status.md for coverage\n");
 }
 
 void print_help() {

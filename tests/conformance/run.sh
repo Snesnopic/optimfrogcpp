@@ -10,7 +10,7 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OFR="${OFR:-$HOME/Downloads/OptimFROG_OSX_x64_5100/ofr}"
 OFRENC="${OFRENC:-$ROOT/build/ofrenc}"
-ODEC="${ODEC:-$ROOT/build/optimfrogcpp}"
+ODEC="${ODEC:-$ROOT/build/ofrdecomp}"
 REFGEN="${REFGEN:-/tmp/ref_gen}"
 DYLIBDIR="${DYLIBDIR:-$ROOT}"          # holds libOptimFROG.0.dylib for ref_gen
 CORPUS="${CORPUS:-$HOME/Downloads/WAVTESTS}"
