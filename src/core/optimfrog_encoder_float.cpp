@@ -10,6 +10,7 @@
 #include "../../include/optimfrog_encoder.h"
 #include <cstring>
 #include <algorithm>
+#include <string>
 
 static uint32_t crc32_table_f[256];
 static void crc32_init_f() {
